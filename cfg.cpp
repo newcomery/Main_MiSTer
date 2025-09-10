@@ -504,7 +504,8 @@ static int cfg_error_count = 0;
 const char* cfg_get_name(uint8_t alt)
 {
 	static int done = 0;
-	static char names[3][64] = {};
+	//static char names[3][64] = {};
+	static char names[6][64] = {};
 	static char name[64];
 
 	if (!done)
@@ -519,7 +520,8 @@ const char* cfg_get_name(uint8_t alt)
 		{
 			struct dirent *de;
 			int i = 0;
-			while ((de = readdir(d)) && i < 3)
+			//while ((de = readdir(d)) && i < 3)
+			while ((de = readdir(d)) && i < 6)
 			{
 				int len = strlen(de->d_name);
 				if (!strncasecmp(de->d_name, "MiSTer_", 7) && !strcasecmp(de->d_name + len - 4, ".ini"))
@@ -530,7 +532,7 @@ const char* cfg_get_name(uint8_t alt)
 			}
 			closedir(d);
 		}
-
+/*
 		for (int i = 1; i < 3; i++)
 		{
 			for (int j = 1; j < 3; j++)
@@ -543,10 +545,12 @@ const char* cfg_get_name(uint8_t alt)
 				}
 			}
 		}
+		*/
 	}
 
 	strcpy(name, "MiSTer.ini");
-	if (alt && alt < 4) strcpy(name, names[alt-1]);
+	//if (alt && alt < 4) strcpy(name, names[alt-1]);
+	if (alt && alt < 5+2) strcpy(name, names[alt-1]);
 	return name;
 }
 
@@ -555,19 +559,21 @@ const char* cfg_get_label(uint8_t alt)
 	if (!alt) return "Main";
 
 	const char *name = cfg_get_name(alt);
-	if (!name[0]) return " -- ";
+	if (!name[0]) return "-- ";
 
-	static char label[6];
+	//static char label[6];
+	static char label[16];
 	snprintf(label, sizeof(label), "%s", name + 7);
 	char *p = strrchr(label, '.');
-	if (p) *p = 0;
+	if (p) *p = '\0';
 	if (!strcasecmp(label, "alt"))   return "Alt1";
 	if (!strcasecmp(label, "alt_1")) return "Alt1";
 	if (!strcasecmp(label, "alt_2")) return "Alt2";
 	if (!strcasecmp(label, "alt_3")) return "Alt3";
 
-	for (int i = 0; i < 4; i++) if (!label[i]) label[i] = ' ';
-	label[4] = 0;
+	//for (int i = 0; i < 10; i++) if (!label[i]) label[i] = ' ';
+	//label[4] = 0;
+	label[10] = 0;
 	return label;
 }
 

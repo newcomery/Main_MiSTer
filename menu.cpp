@@ -215,10 +215,14 @@ static uint32_t menu_save_timer = 0;
 static uint32_t load_addr = 0;
 static int32_t  bt_timer = 0;
 
+static uint32_t g_default_ini_idx = 1;
+
 static bool osd_unlocked = 1;
 static char osd_code_entry[32];
 static uint32_t osd_lock_timer = 0;
 
+static uint32_t menu_vertical_idx = 0;
+static uint32_t menu_real_idx = 0;
 
 extern const char *version;
 
@@ -289,6 +293,15 @@ static const uint32_t helptext_timeouts[] =
 static const char *info_top = "\x80\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x82";
 static const char *info_bottom = "\x85\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x84";
 
+
+void OsdWriteEx(int32_t n, const char *s="", unsigned char inver=0, unsigned char stipple = 0, char usebg = 0)
+{
+	if (n>=0 &&n <16)
+	{
+		OsdWrite(n, s, inver, stipple, usebg);
+		//OsdWrite(n, s, inver, stipple);
+	}
+}
 // file selection menu variables
 static char fs_pFileExt[13] = "xxx";
 static uint32_t fs_ExtLen = 0;
@@ -647,7 +660,7 @@ static void infowrite(int pos, const char* txt)
 	str[29] = 0;
 	OsdWrite(pos, str, 0, 0);
 }
-
+/*
 static void printSysInfo()
 {
 	if (!sysinfo_timer || CheckTimer(sysinfo_timer))
@@ -727,6 +740,103 @@ static void printSysInfo()
 			infowrite(n++, str);
 		}
 		OsdWrite(n++, info_bottom, 0, 0);
+	}
+}
+*/
+
+static void infowriteEx(int pos, const char* txt)
+{
+	char str[40];
+	memset(str, 0x20, 29);
+	int len = strlen(txt);
+	if (len > 27) len = 27;
+	if(len) strncpy(str + 1+ ((27-len)/2), txt, len);
+	str[0] = 0x83;
+	str[28] = 0x83;
+	str[29] = 0;
+	OsdWriteEx(pos, str, 0, 0);
+}
+
+
+static void printSysInfoEx(int r)
+{
+	if (!sysinfo_timer || CheckTimer(sysinfo_timer))
+	{
+		sysinfo_timer = GetTimer(2000);
+		struct battery_data_t bat;
+		int hasbat = getBattery(0, &bat);
+		int n = 2 + r;
+		static int flip = 0;
+
+		char str[40];
+		OsdWriteEx(n++, info_top, 0, 0);
+
+		int j = 0;
+		char *net;
+		net = getNet(1);
+		if (net)
+		{
+			sprintf(str, "\x1c %s", net);
+			infowriteEx(n++, str);
+			j++;
+		}
+		net = getNet(2);
+		if (net)
+		{
+			sprintf(str, "\x1d %s", net);
+			infowriteEx(n++, str);
+			j++;
+		}
+		if (!j) infowriteEx(n++, "No network");
+		if (j<2) infowriteEx(n++, "");
+
+		flip = (flip + 1) & 3;
+		if (hasbat && (flip & 2))
+		{
+			infowriteEx(n++, "");
+
+			sprintf(str, "\x1F ");
+			if (bat.capacity == -1) strcat(str, "n/a");
+			else sprintf(str + strlen(str), "%d%%", bat.capacity);
+			if (bat.current != -1) sprintf(str + strlen(str), " %dmAh", bat.current);
+			if (bat.voltage != -1) sprintf(str + strlen(str), " %d.%dV", bat.voltage / 1000, (bat.voltage / 100) % 10);
+
+			infowriteEx(n++, str);
+
+			str[0] = 0;
+			if (bat.load_current > 0)
+			{
+				sprintf(str + strlen(str), " \x12 %dmA", bat.load_current);
+				if (bat.time != -1)
+				{
+					if (bat.time < 90) sprintf(str + strlen(str), ", ETA: %dm", bat.time);
+					else sprintf(str + strlen(str), ", ETA: %dh%02dm", bat.time / 60, bat.time % 60);
+				}
+			}
+			else if (bat.load_current < -1)
+			{
+				sprintf(str + strlen(str), " \x13 %dmA", -bat.load_current);
+				if (bat.time != -1)
+				{
+					if (bat.time < 90) sprintf(str + strlen(str), ", ETA: %dm", bat.time);
+					else sprintf(str + strlen(str), ", ETA: %dh%02dm", bat.time / 60, bat.time % 60);
+				}
+			}
+			else
+			{
+				strcat(str, "Not charging");
+			}
+			infowriteEx(n++, str);
+		}
+		else
+		{
+			infowriteEx(n++, "");
+			video_core_description(str, 40);
+			infowriteEx(n++, str);
+			video_scaler_description(str, 40);
+			infowriteEx(n++, str);
+		}
+		OsdWriteEx(n++, info_bottom, 0, 0);
 	}
 }
 
@@ -971,7 +1081,7 @@ void HandleUI(void)
 	static int helptext_idx = 0;
 	static int helptext_idx_old = 0;
 	static char helpstate = 0;
-	static char flag;
+	//static char flag;
 	static int cr = 0;
 	static uint32_t cheatsub = 0;
 	static uint8_t card_cid[32];
@@ -1665,7 +1775,8 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_MISC1;
-			menusub = 3;
+			//menusub = 3;
+			menusub = 2;
 		}
 		break;
 
@@ -2377,7 +2488,8 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_MISC1;
-			menusub = 3;
+			//menusub = 3;
+			menusub = 2;
 		}
 		else if(spi_uio_cmd16(UIO_GET_OSDMASK, 0) != hdmask)
 		{
@@ -3667,40 +3779,86 @@ void HandleUI(void)
 	case MENU_MISC1:
 		OsdSetSize(16);
 		helptext_idx = 0;
-		menumask = 0xF;
+		menumask = 0x3FF;
 		menustate = MENU_MISC2;
 		sysinfo_timer = 0; // force refresh
+		
+		m = 7 - menu_vertical_idx;		
+		if (down)
+		{
+			if (menusub == menu_vertical_idx )
+			{		
+				menusub += m;
+			}			
+		}
+		
+		if (up)
+		{
+		        if (menusub == menu_vertical_idx+m -1 ) 
+			{
+				//menusub--;
+				menusub -= m;
+			}
+		}
+		
+		//if(select)
+		
 		OsdSetTitle("Misc. Options", OSD_ARROW_RIGHT);
 
 		if (parentstate != MENU_MISC1)
 		{
 			for (int i = 0; i < OsdGetSize() - 1; i++) OsdWrite(i, "", 0, 0);
-			flag = 1;
-			for (int i = 1; i < 4; i++) if (FileExists(cfg_get_name(i))) flag |= 1 << i;
-			flag |= altcfg() << 4;
-			menusub = 3;
+			//flag = 0;
+			//menusub = 3;
+			menu_vertical_idx = 0;
+			//if (menusub == i+1) strcat(s, " *");
+			for (int i = 0; i < 7; i++) {
+				if (strcmp(cfg_get_label(i), "-- ") != 0)
+				menu_vertical_idx++;
+			}
+
+			//menu_vertical_idx = menu_vertical_idx + 7 - menu_vertical_idx
+			menusub = altcfg();
+			
+			menu_real_idx = 1;
 		}
+		
+		for (int i = 0; i < OsdGetSize() - 1; i++) OsdWrite(i, "", 0, 0);
+		
 		parentstate = MENU_MISC1;
 
-		OsdWrite(1, "         Information");
+		if (menusub==7-1)
+			menu_real_idx = 0;
+		else if (menusub==8-1)
+			menu_real_idx = -1;
+		else if (menusub==9-1)
+			menu_real_idx = -2;
+		else if (menusub==10-1)
+			menu_real_idx = -3;	
+		else
+			menu_real_idx = 1;	
+        
+		OsdWriteEx(menu_real_idx, "         Information");
+		
+		printSysInfoEx(menu_real_idx-1);		// new add
 
-		if (menusub != 0) flag = (flag & 0xF) | (altcfg() << 4);
-		strcpy(s, " Config:");
+		
+		sprintf(s, "           Config");
+		
+		OsdWriteEx(menu_real_idx + 8,s);
+
 		m = 0;
-		for (int i = 0; i < 4; i++)
-		{
-			int en = flag & (1 << i);
-			if (i == (flag >> 4) && en) strcat(s, "\xc");
-			strcat(s, " ");
-			if (m) strcat(s, "\xc ");
-			m = (i == (flag >> 4) && en);
-			if (!en) strcat(s, "\xb");
+		
+		for (unsigned int i = 0; i < 7; i++)
+		{       
+			strcpy(s, "           ");				
 			strcat(s, cfg_get_label(i));
-			if (!en) strcat(s, "\xb");
-		}
-		strcat(s, " ");
-		if (m) strcat(s, "\xc");
-		OsdWrite(10, s, menusub == 0);
+			//strcat(s, cfg_get_name(i));                        
+
+			if (altcfg() == i) strcat(s, " *");
+			
+			OsdWriteEx(menu_real_idx + 9 + i, s, menusub == i);					
+		}		
 
 		m = get_core_volume();
 		{
@@ -3711,7 +3869,7 @@ void HandleUI(void)
 			memset(bar, 0x8C, 8);
 			memset(bar, 0x7f, 8 - m);
 		}
-		OsdWrite(12, s, menusub == 1);
+		OsdWriteEx(menu_real_idx + 16, s, menusub == 8-1);		
 
 		old_volume = get_volume();
 		strcpy(s, "   Global Volume: ");
@@ -3727,19 +3885,20 @@ void HandleUI(void)
 			memset(bar, 0x8C, 8 - vol);
 			memset(bar, 0x7f, 8 - vol - old_volume);
 		}
-		OsdWrite(13, s, menusub == 2);
-
-		OsdWrite(15, STD_EXIT, menusub == 3, 0, OSD_ARROW_RIGHT);
+		OsdWriteEx(menu_real_idx + 17, s, menusub == 9-1);
+		
+		OsdWriteEx(menu_real_idx + 18, STD_EXIT, menusub == 10-1, 0, OSD_ARROW_RIGHT);
+		
 		break;
 
 	case MENU_MISC2:
-		printSysInfo();
-		if ((select && menusub == 3) || menu)
+		//printSysInfo();
+		if ((select && menusub == 10-1) || menu)
 		{
 			menustate = MENU_NONE1;
 			break;
 		}
-		else if (menusub == 0 && (right || left || minus || plus || select))
+		/*else if (menusub == 0 && (right || left || minus || plus || select))
 		{
 			uint8_t i = flag >> 4;
 			if (select)
@@ -3757,13 +3916,22 @@ void HandleUI(void)
 				flag = (flag & 0xF) | (i << 4);
 			}
 			menustate = MENU_MISC1;
+		}*/
+		//else if (menusub >= 0 && menusub < 7 && select)
+		else if (menusub < 7 && select)	//new select ini max seven file
+		{			
+		    g_default_ini_idx = menusub; 
+			//user_io_set_ini(menusub-1);
+			user_io_set_ini(menusub);
+					
+			menustate = MENU_MISC1;
 		}
-		else if(menusub == 1 && (right || left || minus || plus))
+		else if(menusub == 8-1 && (right || left || minus || plus))
 		{
 			set_core_volume((right || plus) ? 1 : -1);
 			menustate = MENU_MISC1;
 		}
-		else if (menusub == 2 && (right || left || minus || plus || select))
+		else if (menusub == 9-1 && (right || left || minus || plus || select))
 		{
 			set_volume((right || plus) ? 1 : (left || minus) ? -1 : 0);
 			menustate = MENU_MISC1;
@@ -4327,7 +4495,8 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_MISC1;
-			menusub = 3;
+			//menusub = 3;
+			menusub = 2;
 		}
 		else if (menusub <= 1 && (select || recent))
 		{
@@ -5681,7 +5850,8 @@ void HandleUI(void)
 		else if (left)
 		{
 			menustate = MENU_MISC1;
-			menusub = 3;
+			//menusub = 3;
+			menusub = 2;
 		}
 		break;
 
